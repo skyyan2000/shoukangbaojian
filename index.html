@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>《寿康宝鉴》万年戒期日历 (阴阳历严格区分版)</title>
+    <script src="https://cdn.jsdelivr.net/npm/lunar-javascript@1.6.12/lunar.min.js"></script>
+    <style>
+        :root {
+            --severe-color: #c62828; --severe-bg: #ffebee;
+            --moderate-color: #e65100; --moderate-bg: #fff3e0;
+            --normal-color: #2e7d32; --normal-bg: #e8f5e9;
+            --today-border: #2196f3; --today-bg: #e3f2fd;
+            --weekend-color: #d32f2f;
+            --text-main: #333; --text-sub: #666;
+            --primary: #8B0000;
+            --bg-gray: #f8f9fa;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 10px; color: var(--text-main); }
+        
+        .container { max-width: 900px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; height: 100vh; max-height: 900px; }
+
+        .header { 
+            padding: 15px 10px; 
+            text-align: center; 
+            border-bottom: 1px solid #eee; 
+            background: #fff; 
+            flex-shrink: 0; 
+            z-index: 10;
+        }
+        h1 { margin: 0 0 15px 0; font-size: 1.3rem; color: var(--primary); }
+        
+        .top-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            background: var(--bg-gray);
+            padding: 12px 15px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            flex-wrap: wrap;
+        }
+
+        .control-item { display: flex; align-items: center; gap: 6px; position: relative; }
+        .control-label { font-size: 0.95rem; font-weight: bold; color: #555; white-space: nowrap; }
+
+        select {
+            appearance: menulist; -webkit-appearance: menulist; -moz-appearance: menulist;
+            padding: 8px 12px; font-size: 1rem; border: 1px solid #ccc;
+            border-radius: 6px; background-color: #fff; color: #333;
+            cursor: pointer; min-width: 100px; outline: none;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); z-index: 100; height: 40px; line-height: 1.2;
+        }
+        select:active, select:focus { border-color: var(--primary); background-color: #fffbfb; }
+
+        .btn-today {
+            padding: 8px 16px; background: var(--primary); color: #fff;
+            border: none; border-radius: 6px; font-size: 0.95rem;
+            cursor: pointer; white-space: nowrap; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .btn-today:active { transform: scale(0.98); background: #a00000; }
+
+        .weekdays {
+            display: grid; grid-template-columns: repeat(7, 1fr);
+            background: var(--bg-gray); padding: 10px 0;
+            border-bottom: 1px solid #eee; text-align: center;
+            font-weight: bold; color: #555; font-size: 0.9rem; flex-shrink: 0;
+        }
+        .weekdays div:nth-child(1), .weekdays div:nth-child(7) { color: var(--weekend-color); }
+
+        .calendar-wrapper {
+            padding: 10px; overflow-y: auto; flex-grow: 1;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .calendar-grid {
+            display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
+        }
+
+        .day-cell {
+            aspect-ratio: 1; border-radius: 8px; padding: 5px;
+            display: flex; flex-direction: column; justify-content: space-between;
+            align-items: center; cursor: pointer; position: relative;
+            transition: all 0.2s; border: 1px solid transparent;
+            background: #fff; min-height: 60px; user-select: none;
+        }
+        @media (min-width: 600px) { .day-cell { min-height: 80px; } }
+
+        .day-cell:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 1; }
+        .day-cell.empty { background: transparent; cursor: default; box-shadow: none; }
+        
+        .day-num {
+            font-size: 1.1rem; font-weight: bold; width: 100%;
+            text-align: left; padding-left: 2px; line-height: 1.2;
+        }
+        /* 突出显示农历 */
+        .day-lunar {
+            font-size: 0.65rem; color: var(--text-sub); width: 100%;
+            text-align: center; white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis; line-height: 1.2;
+        }
+        .day-lunar strong { color: var(--primary); font-weight: bold; }
+        
+        .day-mark { width: 6px; height: 6px; border-radius: 50%; margin-top: 2px; display: none; }
+
+        .status-severe { background-color: var(--severe-bg); border-color: var(--severe-color); }
+        .status-severe .day-mark { display: block; background: var(--severe-color); }
+        .status-severe .day-lunar { color: var(--severe-color); font-weight: bold; }
+
+        .status-moderate { background-color: var(--moderate-bg); border-color: var(--moderate-color); }
+        .status-moderate .day-mark { display: block; background: var(--moderate-color); }
+        .status-moderate .day-lunar { color: var(--moderate-color); }
+
+        .status-normal { background-color: var(--normal-bg); border-color: var(--normal-color); }
+        .status-normal .day-mark { display: block; background: var(--normal-color); }
+        .status-normal .day-lunar { color: var(--normal-color); }
+
+        .is-today {
+            border: 2px solid var(--today-border) !important;
+            background-color: var(--today-bg) !important;
+            font-weight: bold; transform: scale(1.05); z-index: 2;
+        }
+        .is-today .day-num { color: var(--today-border); }
+        .weekend .day-num { color: var(--weekend-color); }
+
+        .legend {
+            display: flex; justify-content: center; gap: 12px;
+            padding: 12px; background: #fafafa; border-top: 1px solid #eee;
+            font-size: 0.75rem; flex-wrap: wrap; flex-shrink: 0;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+        /* 弹窗 */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 2000;
+            justify-content: center; align-items: flex-end; backdrop-filter: blur(3px);
+        }
+        @media (min-width: 600px) { .modal-overlay { align-items: center; } }
+        
+        .modal-content {
+            background: #fff; width: 100%; max-width: 500px;
+            border-radius: 20px 20px 0 0; padding: 25px;
+            animation: slideUp 0.3s ease; max-height: 85vh; overflow-y: auto;
+            position: relative; z-index: 2001;
+        }
+        @media (min-width: 600px) { .modal-content { border-radius: 12px; margin: 20px; } }
+        
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .modal-header { font-size: 1.3rem; font-weight: bold; color: var(--primary); margin-bottom: 15px; text-align: center; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .modal-row { margin-bottom: 12px; }
+        .modal-label { font-weight: bold; color: #666; font-size: 0.85rem; display: block; margin-bottom: 4px; }
+        .modal-value { font-size: 1rem; color: #333; line-height: 1.4; }
+        .consequence { background: #fff3f3; color: #c62828; padding: 12px; border-radius: 6px; border: 1px solid #ffcdd2; font-weight: bold; line-height: 1.4; margin-top: 5px; font-size: 0.9rem; }
+        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; color: #999; background: none; border: none; padding: 0; line-height: 1; z-index: 2002; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>《寿康宝鉴》戒期日历</h1>
+        <div style="font-size: 0.8rem; color: #666; margin-bottom: 10px;">
+            ⚠️ 注：书中戒期均按<strong>农历</strong>计算，本表已自动转换
+        </div>
+        <div class="top-controls">
+            <div class="control-item">
+                <label class="control-label" for="yearSelect">公历年</label>
+                <select id="yearSelect"></select>
+            </div>
+            
+            <div class="control-item">
+                <label class="control-label" for="monthSelect">公历月</label>
+                <select id="monthSelect">
+                    <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                    <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                    <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+                    <option value="10">10</option><option value="11">11</option><option value="12">12</option>
+                </select>
+            </div>
+
+            <button class="btn-today" onclick="goToToday()">📅 今日</button>
+        </div>
+    </div>
+
+    <div class="weekdays">
+        <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+    </div>
+
+    <div class="calendar-wrapper">
+        <div class="calendar-grid" id="calendarGrid">
+            <div style="grid-column: 1/-1; text-align:center; padding: 20px;">正在加载...</div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="dot" style="background:var(--severe-color)"></div>大戒 (农历)</div>
+        <div class="legend-item"><div class="dot" style="background:var(--moderate-color)"></div>中戒 (农历)</div>
+        <div class="legend-item"><div class="dot" style="background:var(--normal-color)"></div>小戒 (农历)</div>
+        <div class="legend-item"><div class="dot" style="border:2px solid var(--today-border); background:#fff"></div>今日</div>
+    </div>
+</div>
+
+<!-- 弹窗 -->
+<div class="modal-overlay" id="modal" onclick="if(event.target===this) closeModal()">
+    <div class="modal-content">
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+        <div class="modal-header" id="m-title">详情</div>
+        <div class="modal-row"><span class="modal-label">📅 公历日期</span><span class="modal-value" id="m-gregorian"></span></div>
+        <div class="modal-row"><span class="modal-label">🌙 农历日期 (戒期依据)</span><span class="modal-value" id="m-lunar" style="color:var(--primary); font-weight:bold;"></span></div>
+        <div class="modal-row"><span class="modal-label">📜 干支</span><span class="modal-value" id="m-ganzhi" style="font-family:monospace; background:#f5f5f5; padding:2px 5px; border-radius:4px;"></span></div>
+        <div class="modal-row" id="jieqi-row" style="display:none;"><span class="modal-label">🌿 节气</span><span class="modal-value" id="m-jieqi" style="color:green; font-weight:bold;"></span></div>
+        <div class="modal-row"><span class="modal-label">⚠️ 戒期事由 (据原书)</span><div class="modal-value" id="m-reason" style="color:#d35400; font-weight:bold;"></div></div>
+        <div class="modal-row"><span class="modal-label">💀 后果 (据原书)</span><div class="consequence" id="m-consequence"></div></div>
+    </div>
+</div>
+
+<script>
+    const yearSelect = document.getElementById('yearSelect');
+    const monthSelect = document.getElementById('monthSelect');
+    const grid = document.getElementById('calendarGrid');
+    const modal = document.getElementById('modal');
+    
+    // === 核心数据：根据《寿康宝鉴》原书录入 (KEY 为 农历月-农历日) ===
+    // 注意：这里的 key 是 Lunar Month 和 Lunar Day
+    const bookData = {
+        '1-1': { r: '天腊，玉帝校世人神气禄命', c: '削禄夺纪', l: 'severe' },
+        '1-3': { r: '万神都会，斗降', c: '夺纪', l: 'severe' },
+        '1-5': { r: '五虚忌', c: '减寿', l: 'moderate' },
+        '1-6': { r: '六耗忌', c: '损寿', l: 'moderate' },
+        '1-7': { r: '上会日', c: '夺纪', l: 'severe' },
+        '1-8': { r: '五殿阎罗天子诞', c: '夺纪', l: 'severe' },
+        '1-9': { r: '玉皇上帝诞', c: '夺纪', l: 'severe' },
+        '1-13': { r: '杨公忌', c: '减寿', l: 'moderate' },
+        '1-14': { r: '三元降', c: '减寿', l: 'moderate' },
+        '1-15': { r: '上元神会，月望', c: '夺纪', l: 'severe' },
+        '1-16': { r: '三元降', c: '减寿', l: 'moderate' },
+        '1-19': { r: '长春真人诞', c: '减寿', l: 'moderate' },
+        '1-23': { r: '三尸神奏事', c: '损寿/子带疾', l: 'moderate' },
+        '1-25': { r: '天地仓开日', c: '夺纪', l: 'severe' },
+        '1-27': { r: '斗降', c: '得病', l: 'moderate' },
+        '1-28': { r: '人神在阴', c: '减寿', l: 'moderate' },
+        '1-29': { r: '月晦，司命奏事', c: '夺纪', l: 'severe' },
+        '1-30': { r: '月晦', c: '夺纪', l: 'severe' },
+        '2-1': { r: '一殿秦广王诞，万神都会', c: '夺纪', l: 'severe' },
+        '2-2': { r: '福德土地正神诞', c: '得祸', l: 'moderate' },
+        '2-3': { r: '文昌帝君诞', c: '削禄夺纪', l: 'severe' },
+        '2-6': { r: '东岳帝君诞', c: '减寿', l: 'moderate' },
+        '2-8': { r: '释迦牟尼佛出家', c: '夺纪', l: 'severe' },
+        '2-11': { r: '宋帝王诞', c: '夺纪', l: 'severe' },
+        '2-14': { r: '张大帝诞', c: '减寿', l: 'moderate' },
+        '2-15': { r: '释迦牟尼佛般涅槃，太上老君诞', c: '夺纪', l: 'severe' },
+        '2-17': { r: '东方杜将军诞', c: '得病', l: 'moderate' },
+        '2-18': { r: '四殿五官王诞', c: '减寿', l: 'moderate' },
+        '2-19': { r: '观音大士诞', c: '夺纪', l: 'severe' },
+        '2-21': { r: '普贤菩萨诞', c: '减寿', l: 'moderate' },
+        '2-23': { r: '至圣先师孔子讳辰', c: '夺纪', l: 'severe' },
+        '2-25': { r: '玄天上帝诞', c: '夺纪', l: 'severe' },
+        '2-27': { r: '斗降', c: '得病', l: 'moderate' },
+        '2-28': { r: '人神在阴', c: '减寿', l: 'moderate' },
+        '2-29': { r: '月晦，司命奏事', c: '夺纪', l: 'severe' },
+        '2-30': { r: '月晦', c: '夺纪', l: 'severe' },
+        '3-1': { r: '二殿楚江王诞', c: '夺纪', l: 'severe' },
+        '3-3': { r: '玄天上帝诞', c: '夺纪', l: 'severe' },
+        '3-6': { r: '六殿卞城王诞', c: '夺纪', l: 'severe' },
+        '3-8': { r: '牛鬼神出', c: '产恶胎', l: 'severe' },
+        '3-9': { r: '杨公忌', c: '损寿', l: 'moderate' },
+        '3-12': { r: '中央五道诞', c: '减寿', l: 'moderate' },
+        '3-14': { r: '玄坛诞', c: '夺纪', l: 'severe' },
+        '3-15': { r: '昊天上帝诞', c: '得病', l: 'moderate' },
+        '3-16': { r: '准提菩萨诞', c: '削禄夺纪', l: 'severe' },
+        '3-18': { r: '中岳大帝诞，后土娘娘诞', c: '减寿', l: 'moderate' },
+        '3-20': { r: '天地仓开日', c: '夺纪', l: 'severe' },
+        '3-23': { r: '七殿泰山王诞', c: '夺纪', l: 'severe' },
+        '3-25': { r: '苍颉至圣先师诞', c: '减寿', l: 'moderate' },
+        '3-27': { r: '斗降', c: '得病', l: 'moderate' },
+        '3-28': { r: '人神在阴', c: '减寿', l: 'moderate' },
+        '3-29': { r: '月晦，司命奏事', c: '夺纪', l: 'severe' },
+        '3-30': { r: '月晦', c: '夺纪', l: 'severe' },
+        '4-1': { r: '八殿都市王诞', c: '夺纪', l: 'severe' },
+        '4-3': { r: '万神善化', c: '失瘏夭胎', l: 'severe' },
+        '4-4': { r: '文殊菩萨诞', c: '减寿', l: 'moderate' },
+        '4-6': { r: '万神善化', c: '失瘏夭胎', l: 'severe' },
+        '4-8': { r: '释迦牟尼佛诞', c: '夺纪', l: 'severe' },
+        '4-14': { r: '纯阳祖师诞', c: '血死', l: 'severe' },
+        '4-15': { r: '钟离祖师诞', c: '减寿', l: 'moderate' },
+        '4-16': { r: '天地仓开日', c: '夺纪', l: 'severe' },
+        '4-17': { r: '十殿转轮王诞', c: '损寿', l: 'moderate' },
+        '4-18': { r: '天地仓开日', c: '夺纪', l: 'severe' },
+        '4-20': { r: '紫微大帝诞', c: '减寿', l: 'moderate' },
+        '4-23': { r: '眼光圣母诞', c: '减寿', l: 'moderate' },
+        '4-25': { r: '斗降', c: '得病', l: 'moderate' },
+        '4-27': { r: '人神在阴', c: '减寿', l: 'moderate' },
+        '4-28': { r: '月晦，司命奏事', c: '夺纪', l: 'severe' },
+        '4-29': { r: '月晦', c: '夺纪', l: 'severe' },
+        '4-30': { r: '月晦', c: '夺纪', l: 'severe' },
+        '5-1': { r: '南极长生大帝诞', c: '夺纪', l: 'severe' },
+        '5-3': { r: '地腊，五帝校定人官爵', c: '夺纪', l: 'severe' },
+        '5-5': { r: '九毒日', c: '夭亡奇祸不测', l: 'severe' },
+        '5-6': { r: '九毒日，杨公忌', c: '夭亡奇祸不测', l: 'severe' },
+        '5-7': { r: '九毒日', c: '夭亡奇祸不测', l: 'severe' },
+        '5-8': { r: '南方五道诞', c: '损寿', l: 'moderate' },
+        '5-11': { r: '天仓开日', c: '削禄夺纪', l: 'severe' },
+        '5-12': { r: '天下都城隍诞', c: '三年内夫妇俱亡', l: 'severe' },
+        '5-13': { r: '炳灵公诞', c: '夺纪', l: 'severe' },
+        '5-14': { r: '夜子时为天地交泰', c: '夭亡奇祸不测', l: 'severe' },
+        '5-15': { r: '月望，九毒日', c: '三年内夫妇俱亡', l: 'severe' },
+        '5-16': { r: '九毒日', c: '夭亡奇祸不测', l: 'severe' },
+        '5-17': { r: '天地元气造化万物之辰', c: '夺纪', l: 'severe' },
+        '5-18': { r: '九毒日', c: '夭亡奇祸不测', l: 'severe' },
+        '5-22': { r: '九毒日', c: '夭亡奇祸不测', l: 'severe' },
+        '5-23': { r: '张天师诞', c: '夭亡奇祸不测', l: 'severe' },
+        '5-25': { r: '孝蛾神诞', c: '得病', l: 'moderate' },
+        '5-26': { r: '九毒日', c: '夭亡奇祸不测', l: 'severe' },
+        '5-27': { r: '九毒日', c: '夭亡奇祸不测', l: 'severe' },
+        '5-28': { r: '九毒日', c: '夭亡奇祸不测', l: 'severe' },
+        '5-29': { r: '月晦，司命奏事', c: '夺纪', l: 'severe' },
+        '5-30': { r: '月晦', c: '夺纪', l: 'severe' },
+        '6-1': { r: '斗降', c: '夺纪', l: 'severe' },
+        '6-3': { r: '杨公忌', c: '损寿', l: 'moderate' },
+        '6-4': { r: '南赡部洲转大法轮', c: '损寿', l: 'moderate' },
+        '6-6': { r: '天仓开日', c: '夺纪', l: 'severe' },
+        '6-8': { r: '金粟如来诞', c: '夺纪', l: 'severe' },
+        '6-10': { r: '井泉龙王诞', c: '遭回禄', l: 'severe' },
+        '6-13': { r: '观音大士涅槃', c: '削禄夺纪', l: 'severe' },
+        '6-14': { r: '南方火神诞', c: '减寿', l: 'moderate' },
+        '6-15': { r: '雷祖诞', c: '夺纪', l: 'severe' },
+        '6-19': { r: '关帝诞', c: '得病', l: 'moderate' },
+        '6-23': { r: '斗降', c: '得病', l: 'moderate' },
+        '6-24': { r: '人神在阴', c: '减寿', l: 'moderate' },
+        '6-25': { r: '月晦，司命奏事', c: '夺纪', l: 'severe' },
+        '6-27': { r: '月晦', c: '夺纪', l: 'severe' },
+        '6-28': { r: '月晦', c: '夺纪', l: 'severe' },
+        '6-29': { r: '月晦', c: '夺纪', l: 'severe' },
+        '6-30': { r: '月晦', c: '夺纪', l: 'severe' },
+        '7-1': { r: '道德腊，五帝校生人善恶', c: '夺纪', l: 'severe' },
+        '7-3': { r: '魁星诞', c: '夺纪', l: 'severe' },
+        '7-5': { r: '中会日', c: '损寿', l: 'moderate' },
+        '7-6': { r: '雷斋日', c: '减寿', l: 'moderate' },
+        '7-7': { r: '阴毒日大忌', c: '削禄夺纪', l: 'severe' },
+        '7-8': { r: '长真谭真人诞', c: '减寿', l: 'moderate' },
+        '7-10': { r: '大势至菩萨诞', c: '减寿', l: 'moderate' },
+        '7-12': { r: '西王母诞', c: '夺纪', l: 'severe' },
+        '7-13': { r: '太岁诞', c: '夺纪', l: 'severe' },
+        '7-14': { r: '增福财神诞', c: '削禄夺纪', l: 'severe' },
+        '7-15': { r: '三元降，地官校籍', c: '夺纪', l: 'severe' },
+        '7-16': { r: '三元降', c: '减寿', l: 'moderate' },
+        '7-18': { r: '杨公忌', c: '夺纪', l: 'severe' },
+        '7-19': { r: '地藏菩萨诞', c: '得病', l: 'moderate' },
+        '7-22': { r: '斗降', c: '夺纪', l: 'severe' },
+        '7-23': { r: '人神在阴', c: '减寿', l: 'moderate' },
+        '7-25': { r: '月晦，司命奏事', c: '夺纪', l: 'severe' },
+        '7-27': { r: '月晦', c: '夺纪', l: 'severe' },
+        '7-28': { r: '月晦', c: '夺纪', l: 'severe' },
+        '7-29': { r: '月晦', c: '夺纪', l: 'severe' },
+        '7-30': { r: '月晦', c: '夺纪', l: 'severe' },
+        '8-1': { r: '许真君诞', c: '夺纪', l: 'severe' },
+        '8-3': { r: '北斗诞，司命灶君诞', c: '削禄夺纪', l: 'severe' },
+        '8-5': { r: '雷声大帝诞', c: '遭回禄', l: 'severe' },
+        '8-6': { r: '雷斋', c: '夺纪', l: 'severe' },
+        '8-8': { r: '北斗大帝诞', c: '减寿', l: 'moderate' },
+        '8-10': { r: '西方五道诞', c: '暴亡', l: 'severe' },
+        '8-12': { r: '太阴朝元', c: '贫夭', l: 'severe' },
+        '8-14': { r: '天曹掠刷真君降', c: '减寿', l: 'moderate' },
+        '8-15': { r: '太阴朝元，天人兴福之辰', c: '削禄夺纪', l: 'severe' },
+        '8-16': { r: '汉桓侯张显王诞', c: '得病', l: 'moderate' },
+        '8-18': { r: '灶君夫人诞', c: '夺纪', l: 'severe' },
+        '8-23': { r: '至圣先师孔子诞', c: '夺算', l: 'severe' },
+        '8-24': { r: '杨公忌', c: '夺纪', l: 'severe' },
+        '8-25': { r: '人神在阴', c: '减寿', l: 'moderate' },
+        '8-27': { r: '月晦，司命奏事', c: '夺纪', l: 'severe' },
+        '8-28': { r: '诸神考校', c: '夺纪', l: 'severe' },
+        '8-29': { r: '月晦', c: '夺纪', l: 'severe' },
+        '8-30': { r: '月晦', c: '夺纪', l: 'severe' },
+        '9-1': { r: '南斗诞，北斗九星降', c: '削禄夺纪', l: 'severe' },
+        '9-3': { r: '五瘟神诞', c: '夺纪', l: 'severe' },
+        '9-8': { r: '斗母诞', c: '削禄夺纪', l: 'severe' },
+        '9-9': { r: '酆都大帝诞，玄天上帝飞升', c: '夺纪', l: 'severe' },
+        '9-10': { r: '斗母降', c: '夺纪', l: 'severe' },
+        '9-11': { r: '孟婆尊神诞', c: '水厄', l: 'severe' },
+        '9-13': { r: '金龙四大王诞', c: '减寿', l: 'moderate' },
+        '9-14': { r: '日宫月宫会合', c: '减寿', l: 'moderate' },
+        '9-15': { r: '观世音菩萨出家日', c: '夺纪', l: 'severe' },
+        '9-17': { r: '杨公忌', c: '得病', l: 'moderate' },
+        '9-19': { r: '斗降', c: '危疾', l: 'severe' },
+        '9-23': { r: '人神在阴', c: '减寿', l: 'moderate' },
+        '9-25': { r: '药师琉璃光佛诞', c: '减寿', l: 'moderate' },
+        '9-27': { r: '月晦，司命奏事', c: '夺纪', l: 'severe' },
+        '9-28': { r: '月晦', c: '夺纪', l: 'severe' },
+        '9-29': { r: '月晦', c: '夺纪', l: 'severe' },
+        '9-30': { r: '月晦', c: '夺纪', l: 'severe' },
+        '10-1': { r: '民岁腊', c: '夺纪', l: 'severe' },
+        '10-3': { r: '三茅诞', c: '一年内死', l: 'severe' },
+        '10-5': { r: '下会日', c: '夺纪', l: 'severe' },
+        '10-6': { r: '达摩祖师诞', c: '损寿', l: 'moderate' },
+        '10-8': { r: '佛涅槃日大忌色欲', c: '夺纪', l: 'severe' },
+        '10-10': { r: '天曹考察', c: '一年内死', l: 'severe' },
+        '10-11': { r: '四天王降', c: '减寿', l: 'moderate' },
+        '10-14': { r: '三元降', c: '夺纪', l: 'severe' },
+        '10-15': { r: '下元水府校籍', c: '减寿', l: 'moderate' },
+        '10-16': { r: '三元降', c: '减寿', l: 'moderate' },
+        '10-23': { r: '杨公忌', c: '夺纪', l: 'severe' },
+        '10-25': { r: '北极紫薇大帝降', c: '得病', l: 'moderate' },
+        '10-27': { r: '人神在阴', c: '减寿', l: 'moderate' },
+        '10-28': { r: '月晦，司命奏事', c: '夺纪', l: 'severe' },
+        '10-29': { r: '月晦', c: '夺纪', l: 'severe' },
+        '10-30': { r: '月晦', c: '夺纪', l: 'severe' },
+        '11-1': { r: '斗降', c: '夺纪', l: 'severe' },
+        '11-3': { r: '至圣先师孔子诞', c: '夺纪', l: 'severe' },
+        '11-4': { r: '西岳大帝诞', c: '削禄夺纪', l: 'severe' },
+        '11-6': { r: '天仓开日', c: '削禄夺纪', l: 'severe' },
+        '11-8': { r: '太乙救苦天尊诞', c: '夺纪', l: 'severe' },
+        '11-11': { r: '上半夜犯男死，下半夜犯女死', c: '奇祸/绝嗣', l: 'severe' },
+        '11-14': { r: '阿弥陀佛诞', c: '大凶', l: 'severe' },
+        '11-15': { r: '太阳日宫诞', c: '夺纪', l: 'severe' },
+        '11-17': { r: '杨公忌', c: '得病', l: 'moderate' },
+        '11-19': { r: '张仙诞', c: '减寿', l: 'moderate' },
+        '11-21': { r: '掠刷大夫降', c: '夺纪', l: 'severe' },
+        '11-23': { r: '北方五道诞', c: '得病', l: 'moderate' },
+        '11-25': { r: '斗降', c: '减寿', l: 'moderate' },
+        '11-26': { r: '人神在阴', c: '减寿', l: 'moderate' },
+        '11-27': { r: '月晦，司命奏事', c: '夺纪', l: 'severe' },
+        '11-28': { r: '月晦', c: '夺纪', l: 'severe' },
+        '11-29': { r: '月晦', c: '夺纪', l: 'severe' },
+        '11-30': { r: '月晦', c: '夺纪', l: 'severe' },
+        '12-1': { r: '天仓开月', c: '夺纪', l: 'severe' },
+        '12-3': { r: '雷斋日', c: '夺纪', l: 'severe' },
+        '12-6': { r: '王侯腊', c: '减寿', l: 'moderate' },
+        '12-8': { r: '释迦如来成道日', c: '夺纪', l: 'severe' },
+        '12-12': { r: '太素三元君朝真', c: '夺纪', l: 'severe' },
+        '12-14': { r: '南岳大帝诞', c: '促寿', l: 'severe' },
+        '12-15': { r: '杨公忌', c: '大祸', l: 'severe' },
+        '12-16': { r: '天地交道', c: '奇祸', l: 'severe' },
+        '12-19': { r: '天猷上帝诞', c: '夺纪', l: 'severe' },
+        '12-20': { r: '五岳神降', c: '得病', l: 'moderate' },
+        '12-21': { r: '司命朝天奏人善恶', c: '犯者男女俱亡', l: 'severe' },
+        '12-23': { r: '三清玉帝同降考察善恶', c: '夺纪', l: 'severe' },
+        '12-24': { r: '斗降', c: '得病', l: 'moderate' },
+        '12-25': { r: '人神在阴', c: '减寿', l: 'moderate' },
+        '12-27': { r: '华严菩萨诞', c: '减寿', l: 'moderate' },
+        '12-28': { r: '诸神下降，察访善恶', c: '夺纪', l: 'severe' },
+        '12-29': { r: '月晦', c: '夺纪', l: 'severe' },
+        '12-30': { r: '月晦', c: '夺纪', l: 'severe' }
+    };
+
+    function initYearSelect() {
+        const currentYear = new Date().getFullYear();
+        for (let y = 1900; y <= 2100; y++) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.text = y + '年';
+            yearSelect.appendChild(opt);
+        }
+        yearSelect.value = currentYear;
+    }
+
+    window.onload = function() {
+        if (typeof Solar === 'undefined') {
+            grid.innerHTML = '<div style="color:red; padding:20px; grid-column: 1/-1; text-align:center;">❌ 历法库加载失败<br>请检查网络。</div>';
+            return;
+        }
+        initYearSelect();
+        const now = new Date();
+        yearSelect.value = now.getFullYear();
+        monthSelect.value = now.getMonth() + 1;
+        
+        function handleChange() {
+            renderCalendar(parseInt(yearSelect.value), parseInt(monthSelect.value));
+        }
+        
+        yearSelect.addEventListener('change', handleChange);
+        monthSelect.addEventListener('change', handleChange);
+        
+        renderCalendar(now.getFullYear(), now.getMonth() + 1);
+    };
+
+    function goToToday() {
+        const now = new Date();
+        yearSelect.value = now.getFullYear();
+        monthSelect.value = now.getMonth() + 1;
+        renderCalendar(now.getFullYear(), now.getMonth() + 1);
+        setTimeout(() => {
+            const todayCell = document.querySelector('.is-today');
+            if(todayCell) {
+                todayCell.scrollIntoView({behavior: 'smooth', block: 'center'});
+                todayCell.style.transform = 'scale(1.1)';
+                setTimeout(() => todayCell.style.transform = '', 300);
+            }
+        }, 100);
+    }
+
+    function renderCalendar(year, month) {
+        grid.innerHTML = '';
+        const firstDay = new Date(year, month - 1, 1);
+        const startWeekDay = firstDay.getDay(); 
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const today = new Date();
+        const isCurrentMonth = (today.getFullYear() === year && today.getMonth() + 1 === month);
+
+        for (let i = 0; i < startWeekDay; i++) {
+            const empty = document.createElement('div');
+            empty.className = 'day-cell empty';
+            grid.appendChild(empty);
+        }
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            try {
+                const dateObj = new Date(year, month - 1, d);
+                const solar = Solar.fromDate(dateObj);
+                const lunar = solar.getLunar();
+                
+                // 【关键修正】获取农历月和农历日
+                const lunarMonth = lunar.getMonth();
+                const lunarDay = lunar.getDay();
+                
+                const weekDay = dateObj.getDay();
+                const ganzhiDay = lunar.getDayInGanZhi();
+                const lunarDayStr = lunar.getDayInChinese();
+                
+                let isLeap = false;
+                if (typeof lunar.isLeap === 'function') isLeap = lunar.isLeap();
+                const lunarMonthStr = (isLeap ? '闰' : '') + lunar.getMonthInChinese() + '月';
+                
+                let jieQi = '';
+                if (typeof lunar.getJieQi === 'function') jieQi = lunar.getJieQi();
+
+                let status = ''; 
+                let reasons = [];
+                let consequence = "无特殊禁忌，宜清心寡欲。";
+                let isBookData = false;
+
+                // 【关键修正】使用农历月日作为 Key 去匹配书本数据
+                const key = `${lunarMonth}-${lunarDay}`;
+                
+                if (bookData[key]) {
+                    status = bookData[key].l;
+                    reasons.push(bookData[key].r);
+                    consequence = bookData[key].c;
+                    isBookData = true;
+                }
+
+                // 节气判断 (节气是按阳历算的，但影响戒期)
+                if (jieQi) {
+                    if (!isBookData || status !== 'severe') {
+                         status = 'severe';
+                         reasons.push(`节气：${jieQi}`);
+                         consequence = "节气日天地气场剧变，犯之减寿一纪，易得急病。";
+                         isBookData = true;
+                    } else {
+                        reasons.push(`节气：${jieQi}`);
+                    }
+                }
+                
+                // 庚申、甲子 (按干支日，与阴阳历无关，每天都可能遇到)
+                if (!isBookData && (ganzhiDay === '庚申' || ganzhiDay === '甲子')) {
+                    status = 'severe';
+                    reasons.push(`${ganzhiDay}日 (三尸神/天地交泰)`);
+                    consequence = "犯之夺纪 (12年)，最损元神。";
+                } 
+                // 十斋日 (必须是农历的特定日期)
+                else if (!isBookData && [1, 8, 14, 15, 18, 23, 24, 28, 29, 30].includes(lunarDay)) {
+                    if (!status) {
+                        status = 'normal';
+                        const subReasons = ['十斋日'];
+                        if (lunarDay === 1 || lunarDay === 15) subReasons.push('朔望');
+                        if ([8, 14, 23].includes(lunarDay)) subReasons.push('四天王巡行');
+                        reasons.push(subReasons.join(' / '));
+                        consequence = "犯之减寿，神明记过。";
+                    } else {
+                        reasons.push('十斋日');
+                    }
+                }
+
+                if (reasons.length === 0) reasons.push('平日');
+
+                const cell = document.createElement('div');
+                cell.className = `day-cell ${status ? 'status-' + status : ''} ${weekDay === 0 || weekDay === 6 ? 'weekend' : ''}`;
+                
+                if (isCurrentMonth && d === today.getDate()) {
+                    cell.classList.add('is-today');
+                }
+
+                let html = `<div class="day-num">${d}</div>`;
+                // 显示农历，如果是戒期日，加粗显示
+                if (status) {
+                    html += `<div class="day-lunar"><strong>${lunarMonthStr}${lunarDayStr}</strong></div>`;
+                } else {
+                    html += `<div class="day-lunar">${lunarMonthStr}${lunarDayStr}</div>`;
+                }
+                
+                if (status) html += `<div class="day-mark"></div>`;
+                
+                cell.innerHTML = html;
+                
+                cell.onclick = () => showDetail(
+                    `${year}-${month}-${d}`,
+                    `${lunarMonthStr}${lunarDayStr}`,
+                    `${lunar.getYearInGanZhi()} ${lunar.getMonthInGanZhi()} ${ganzhiDay}`,
+                    reasons,
+                    consequence,
+                    status,
+                    jieQi
+                );
+
+                grid.appendChild(cell);
+            } catch (e) {
+                console.error("Render error:", e);
+                const cell = document.createElement('div');
+                cell.className = 'day-cell';
+                cell.innerHTML = `<div class="day-num">${d}</div><div class="day-lunar" style="color:red">Err</div>`;
+                grid.appendChild(cell);
+            }
+        }
+    }
+
+    function showDetail(g, l, gz, r, c, s, jq) {
+        document.getElementById('m-gregorian').innerText = g;
+        document.getElementById('m-lunar').innerText = l + " (戒期以此为准)";
+        document.getElementById('m-ganzhi').innerText = gz;
+        document.getElementById('m-reason').innerHTML = r.join('<br>');
+        document.getElementById('m-consequence').innerText = c;
+        
+        const jqRow = document.getElementById('jieqi-row');
+        if (jq) {
+            document.getElementById('m-jieqi').innerText = jq;
+            jqRow.style.display = 'block';
+        } else {
+            jqRow.style.display = 'none';
+        }
+
+        const title = document.getElementById('m-title');
+        if (s === 'severe') { title.innerText = '⚠️ 严重戒期'; title.style.color = '#c62828'; }
+        else if (s === 'moderate') { title.innerText = '⚠️ 中等戒期'; title.style.color = '#e65100'; }
+        else if (s === 'normal') { title.innerText = '🟢 一般戒期'; title.style.color = '#2e7d32'; }
+        else { title.innerText = '✅ 平日'; title.style.color = '#555'; }
+
+        modal.style.display = 'flex';
+    }
+
+    function closeModal() { modal.style.display = 'none'; }
+    
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            const y = parseInt(yearSelect.value);
+            const m = parseInt(monthSelect.value);
+            renderCalendar(y, m);
+        }, 200);
+    });
+</script>
+
+</body>
+</html>
